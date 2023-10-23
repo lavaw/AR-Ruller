@@ -10,8 +10,11 @@ import SceneKit
 import ARKit
 
 class ViewController: UIViewController, ARSCNViewDelegate {
-
+    
     @IBOutlet var sceneView: ARSCNView!
+    
+    var dotNodes = [SCNNode]()
+    var textNode = SCNNode()
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -19,14 +22,6 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         // Set the view's delegate
         sceneView.delegate = self
         
-        // Show statistics such as fps and timing information
-        sceneView.showsStatistics = true
-        
-        // Create a new scene
-        let scene = SCNScene(named: "art.scnassets/ship.scn")!
-        
-        // Set the scene to the view
-        sceneView.scene = scene
     }
     
     override func viewWillAppear(_ animated: Bool) {
@@ -34,7 +29,7 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         
         // Create a session configuration
         let configuration = ARWorldTrackingConfiguration()
-
+        
         // Run the view's session
         sceneView.session.run(configuration)
     }
@@ -45,30 +40,73 @@ class ViewController: UIViewController, ARSCNViewDelegate {
         // Pause the view's session
         sceneView.session.pause()
     }
-
-    // MARK: - ARSCNViewDelegate
     
-/*
-    // Override to create and configure nodes for anchors added to the view's session.
-    func renderer(_ renderer: SCNSceneRenderer, nodeFor anchor: ARAnchor) -> SCNNode? {
-        let node = SCNNode()
-     
-        return node
-    }
-*/
-    
-    func session(_ session: ARSession, didFailWithError error: Error) {
-        // Present an error message to the user
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         
+        if dotNodes.count >= 2 {
+            for dot in dotNodes {
+                dot.removeFromParentNode()
+            }
+            dotNodes = [SCNNode]()
+        }
+        
+        if let touchLocation = touches.first?.location(in: sceneView) {
+            if let query = sceneView.raycastQuery(from: touchLocation, allowing: .estimatedPlane, alignment: .any) {
+                
+                let hitTestResults = sceneView.session.raycast(query)
+                
+                if let hitResult = hitTestResults.first {
+                    addDot(at: hitResult)
+                }
+            }
+        }
+    }
+    func addDot(at hitResult: ARRaycastResult) {
+        let dotGeometry = SCNSphere(radius: 0.005)
+        let material = SCNMaterial()
+        material.diffuse.contents = UIColor.red
+        
+        dotGeometry.materials = [material]
+        
+        let dotNode = SCNNode(geometry: dotGeometry)
+        
+        dotNode.position = SCNVector3(x: hitResult.worldTransform.columns.3.x,
+                                      y: hitResult.worldTransform.columns.3.y,
+                                      z: hitResult.worldTransform.columns.3.z)
+        
+        sceneView.scene.rootNode.addChildNode(dotNode)
+        
+        dotNodes.append(dotNode)
+        
+        if dotNodes.count >= 2 {
+            calculate()
+        }
+    }
+    func calculate() {
+        let start = dotNodes[0]
+        let end = dotNodes[1]
+        
+        let a = end.position.x - start.position.x
+        let b = end.position.y - start.position.y
+        let c = end.position.z - start.position.z
+        
+        let distance = sqrt((pow(a, 2) + pow(b, 2) + pow(c, 2)) * 1000)
+        
+        updateText(text: "\(abs(distance))", atPosition: end.position)
     }
     
-    func sessionWasInterrupted(_ session: ARSession) {
-        // Inform the user that the session has been interrupted, for example, by presenting an overlay
+    func updateText(text: String, atPosition position: SCNVector3) {
         
-    }
-    
-    func sessionInterruptionEnded(_ session: ARSession) {
-        // Reset tracking and/or remove existing anchors if consistent tracking is required
+        textNode.removeFromParentNode()
         
+        let textGeometry = SCNText(string: text, extrusionDepth: 1.0)
+        
+        textGeometry.firstMaterial?.diffuse.contents = UIColor.red
+        
+        textNode = SCNNode(geometry: textGeometry)
+        textNode.position = SCNVector3(x: position.x, y: position.y + 0.1, z: position.z)
+        textNode.scale = SCNVector3(x: 0.01, y: 0.01, z: 0.01)
+        
+        sceneView.scene.rootNode.addChildNode(textNode)
     }
 }
